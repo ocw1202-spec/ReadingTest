@@ -305,7 +305,7 @@
                 <p class="text-gray-500 text-sm mt-2">請輸入密碼以進入教師控制台</p>
             </div>
             <div class="mb-6">
-                <input type="password" id="teacher-pwd-input" placeholder="請輸入密碼 (預設 123456)" class="w-full bg-gray-50 border-2 border-gray-200 rounded-xl p-4 text-center font-bold text-xl tracking-widest focus:border-accent focus:outline-none" onkeypress="if(event.key==='Enter') verifyTeacherLogin()">
+                <input type="password" id="teacher-pwd-input" placeholder="請輸入密碼 (預設 6501)" class="w-full bg-gray-50 border-2 border-gray-200 rounded-xl p-4 text-center font-bold text-xl tracking-widest focus:border-accent focus:outline-none" onkeypress="if(event.key==='Enter') verifyTeacherLogin()">
             </div>
             <div class="flex gap-3">
                 <button onclick="hideModal('teacher-login-modal')" class="flex-1 bg-gray-100 text-gray-600 font-bold py-3 rounded-xl hover:bg-gray-200 transition-colors">返回首頁</button>
@@ -363,7 +363,7 @@
             <!-- 新增：教師密碼設定區 -->
             <div class="mb-6 bg-pink-50 p-4 rounded-xl border border-pink-200">
                 <label class="block text-pink-800 font-bold mb-2"><i class="fa-solid fa-lock"></i> 自訂教師登入密碼 (選填)</label>
-                <p class="text-xs text-pink-600 mb-2 leading-relaxed">預設密碼為 <b>123456</b>。為了防止學生按 F12 偷看原始碼，系統採用 SHA-256 單向加密技術，真實密碼不會暴露在程式碼中。</p>
+                <p class="text-xs text-pink-600 mb-2 leading-relaxed">預設密碼為 <b>6501</b>。為了防止學生按 F12 偷看原始碼，系統採用 SHA-256 單向加密技術，真實密碼不會暴露在程式碼中。</p>
                 <input type="password" id="config-teacher-pwd" placeholder="若需更改請在此輸入新密碼，留空則維持原設定" class="w-full bg-white border border-pink-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-pink-400">
             </div>
 
@@ -556,8 +556,8 @@
             const inputHash = await hashPassword(pwdInput);
             const config = getFinalConfig();
             
-            // "123456" 的 SHA-256 Hash，原始碼中不包含明碼
-            const DEFAULT_TEACHER_HASH = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92"; 
+            // "6501" 的 SHA-256 Hash，由於是預設密碼故直接由程式動態產生，自訂密碼則只存 Hash
+            const DEFAULT_TEACHER_HASH = await hashPassword("6501"); 
             
             // 優先使用使用者在設定中儲存的雜湊密碼，若無則使用預設雜湊密碼
             const targetHash = (config && config.teacherPwdHash) ? config.teacherPwdHash : DEFAULT_TEACHER_HASH;
