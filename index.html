@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIRLS 閱讀小大師 AI 測驗平台</title>
+    <!-- 引入 Noto Sans TC 字體 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 FontAwesome 圖示 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        // 設定 Tailwind 客製化主題 (柔和、可愛風格)
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans TC"', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#FF9A9E',    // 柔和粉紅
+                        secondary: '#FECFEF',  // 淺粉
+                        accent: '#A18CD1',     // 柔和紫
+                        background: '#FDFBFB', // 溫暖白
+                        surface: '#FFFFFF',
+                        textMain: '#4A4A4A',
+                        success: '#A8E6CF',
+                        warning: '#FFD3B6',
+                        error: '#FFAAA5'
+                    },
+                    boxShadow: {
+                        'cute': '0 10px 25px -5px rgba(255, 154, 158, 0.3), 0 8px 10px -6px rgba(255, 154, 158, 0.1)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #FDFBFB; color: #4A4A4A; }
+        /* 隱藏卷軸但保留滾動功能 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Toast 動畫 */
+        @keyframes slideIn { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        .toast-enter { animation: slideIn 0.3s ease-out forwards; }
+        .toast-exit { animation: fadeOut 0.3s ease-out forwards; }
+        
+        /* 卡片懸浮動畫 */
+        .hover-bounce:hover { transform: translateY(-5px); transition: transform 0.2s ease; }
+        
+        /* 載入動畫 */
+        .loader {
+            border: 5px solid #FECFEF; border-top: 5px solid #FF9A9E;
+            border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* 隱藏區塊用 */
+        .hidden-view { display: none !important; }
+    </style>
+</head>
+<body class="font-sans min-h-screen bg-gradient-to-br from-background to-secondary/30 relative pb-20">
+
+    <!-- 頂部導覽列 -->
+    <header class="bg-white shadow-sm p-4 sticky top-0 z-10 rounded-b-3xl">
+        <div class="max-w-5xl mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-black text-primary flex items-center gap-2 cursor-pointer" onclick="switchView('main-menu')">
+                <i class="fa-solid fa-book-open-reader"></i> PIRLS 閱讀小大師
+            </h1>
+            <div id="auth-status" class="text-sm font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                <i class="fa-solid fa-circle-notch fa-spin"></i> 系統初始化中...
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto p-4 mt-6">
+        
+        <!-- 視圖 1: 主選單 (包含設定引導) -->
+        <section id="main-menu" class="view-section">
+            <div class="text-center mb-10">
+                <h2 class="text-3xl font-bold text-accent mb-4">歡迎來到 AI 閱讀測驗平台</h2>
+                <p class="text-lg text-gray-600">請選擇您的身分開始使用</p>
+            </div>
+
+            <!-- Firebase 設定引導區塊 (未設定時顯示) -->
+            <div id="setup-banner" class="hidden bg-warning/30 border-2 border-warning rounded-3xl p-6 mb-8 text-center shadow-cute">
+                <h3 class="text-xl font-bold text-orange-600 mb-2"><i class="fa-solid fa-triangle-exclamation"></i> 系統尚未連接資料庫</h3>
+                <p class="text-gray-700 mb-6">為了儲存測驗與成績，請先設定您的 Firebase 專案連線資訊。</p>
+                <div class="flex justify-center gap-4 flex-wrap">
+                    <button onclick="showModal('help-modal')" class="bg-white text-orange-600 border-2 border-orange-400 font-bold py-3 px-6 rounded-full hover-bounce shadow-md">
+                        <i class="fa-solid fa-circle-question"></i> 如何設定 Firebase
+                    </button>
+                    <button onclick="showModal('settings-modal')" class="bg-orange-500 text-white font-bold py-3 px-6 rounded-full hover-bounce shadow-md">
+                        <i class="fa-solid fa-gear"></i> 設定連線資訊
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+                <!-- 學生入口 -->
+                <div onclick="checkSetupAndGo('student-entry')" class="bg-white rounded-3xl p-8 shadow-cute cursor-pointer hover-bounce border-4 border-transparent hover:border-primary transition-all text-center group">
+                    <div class="w-24 h-24 mx-auto bg-secondary rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-child-reaching text-5xl text-primary"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">我是學生</h3>
+                    <p class="text-gray-500">輸入代碼，開始挑戰閱讀測驗！</p>
+                </div>
+                <!-- 教師入口 -->
+                <div onclick="checkSetupAndGo('teacher-dashboard')" class="bg-white rounded-3xl p-8 shadow-cute cursor-pointer hover-bounce border-4 border-transparent hover:border-accent transition-all text-center group">
+                    <div class="w-24 h-24 mx-auto bg-indigo-100 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-chalkboard-user text-5xl text-accent"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">我是老師</h3>
+                    <p class="text-gray-500">AI 輔助出題，分析學生閱讀成效</p>
+                </div>
+            </div>
+            
+            <div class="text-center mt-12">
+                <button onclick="showModal('settings-modal')" class="text-gray-400 hover:text-gray-600 text-sm">
+                    <i class="fa-solid fa-sliders"></i> 進階系統設定
+                </button>
+            </div>
+        </section>
+
+        <!-- 視圖 2: 教師控制台 -->
+        <section id="teacher-dashboard" class="view-section hidden-view">
+            <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
+                <h2 class="text-3xl font-bold text-accent"><i class="fa-solid fa-chalkboard-user"></i> 教師控制台</h2>
+                <div class="flex gap-2">
+                    <button onclick="switchView('main-menu')" class="bg-gray-200 text-gray-700 py-2 px-4 rounded-full font-bold hover:bg-gray-300">回主選單</button>
+                    <button onclick="switchView('teacher-create')" class="bg-primary text-white py-2 px-6 rounded-full font-bold shadow-md hover:bg-pink-500"><i class="fa-solid fa-plus"></i> 新增測驗</button>
+                </div>
+            </div>
+
+            <!-- 測驗列表 -->
+            <div class="bg-white rounded-3xl shadow-cute p-6 mb-8">
+                <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">已建立的測驗列表</h3>
+                <div id="test-list-container" class="space-y-4 max-h-96 overflow-y-auto pr-2">
+                    <div class="text-center py-10 text-gray-400"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><br>載入中...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 視圖 3: AI 出題介面 -->
+        <section id="teacher-create" class="view-section hidden-view">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-3xl font-bold text-primary"><i class="fa-solid fa-wand-magic-sparkles"></i> AI 智能出題</h2>
+                <button onclick="switchView('teacher-dashboard')" class="bg-gray-200 text-gray-700 py-2 px-4 rounded-full font-bold hover:bg-gray-300">返回列表</button>
+            </div>
+
+            <div class="bg-white rounded-3xl shadow-cute p-6 md:p-8">
+                <div class="mb-6">
+                    <label class="block text-gray-700 font-bold mb-2">測驗標題</label>
+                    <input type="text" id="create-title" placeholder="例如：四年級國語 - 隨機文章閱讀理解" class="w-full bg-gray-50 border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:border-primary transition-colors">
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-gray-700 font-bold mb-2">閱讀文本 (請貼上文章內容)</label>
+                    <textarea id="create-text" rows="6" placeholder="請在此貼上文章內容。AI 將根據此內容出題..." class="w-full bg-gray-50 border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:border-primary transition-colors resize-none"></textarea>
+                </div>
+
+                <!-- API Key 輸入 (如果沒有環境變數) -->
+                <div class="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-200">
+                    <label class="block text-blue-800 font-bold mb-2"><i class="fa-solid fa-key"></i> Google Gemini API Key (必填)</label>
+                    <input type="password" id="gemini-api-key" placeholder="輸入您的 Gemini API Key" class="w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    <p class="text-xs text-blue-600 mt-1">申請自 Google AI Studio，僅於本次產生題目使用，不會儲存於資料庫。</p>
+                </div>
+
+                <div class="mb-8">
+                    <label class="block text-gray-700 font-bold mb-2">PIRLS 題數設定 (共需產生幾題？預設每層次1題)</label>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-green-50 p-3 rounded-xl text-center border border-green-200">
+                            <div class="font-bold text-green-700 text-sm">直接提取</div>
+                            <input type="number" id="q-count-1" value="1" min="0" max="5" class="w-full text-center mt-2 border rounded p-1">
+                        </div>
+                        <div class="bg-blue-50 p-3 rounded-xl text-center border border-blue-200">
+                            <div class="font-bold text-blue-700 text-sm">直接推斷</div>
+                            <input type="number" id="q-count-2" value="1" min="0" max="5" class="w-full text-center mt-2 border rounded p-1">
+                        </div>
+                        <div class="bg-yellow-50 p-3 rounded-xl text-center border border-yellow-200">
+                            <div class="font-bold text-yellow-700 text-sm">詮釋整合</div>
+                            <input type="number" id="q-count-3" value="1" min="0" max="5" class="w-full text-center mt-2 border rounded p-1">
+                        </div>
+                        <div class="bg-purple-50 p-3 rounded-xl text-center border border-purple-200">
+                            <div class="font-bold text-purple-700 text-sm">比較評估</div>
+                            <input type="number" id="q-count-4" value="1" min="0" max="5" class="w-full text-center mt-2 border rounded p-1">
+                        </div>
+                    </div>
+                </div>
+
+                <button id="btn-generate" onclick="generateTest()" class="w-full bg-primary text-white font-black text-xl py-4 rounded-2xl shadow-cute hover:bg-pink-500 transition-colors flex justify-center items-center gap-2">
+                    <i class="fa-solid fa-robot"></i> 開始 AI 魔法出題
+                </button>
+
+                <!-- AI 處理中遮罩 -->
+                <div id="ai-loading" class="hidden mt-6 text-center">
+                    <div class="loader mx-auto mb-4"></div>
+                    <p class="text-accent font-bold animate-pulse" id="ai-status-text">AI 正在閱讀文章並構思題目中，請稍候...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 視圖 4: 學生入口 -->
+        <section id="student-entry" class="view-section hidden-view">
+             <div class="flex justify-between items-center mb-10">
+                <h2 class="text-3xl font-bold text-primary"><i class="fa-solid fa-child-reaching"></i> 測驗報到處</h2>
+                <button onclick="switchView('main-menu')" class="bg-gray-200 text-gray-700 py-2 px-4 rounded-full font-bold hover:bg-gray-300">回主選單</button>
+            </div>
+
+            <div class="max-w-md mx-auto bg-white p-8 rounded-3xl shadow-cute">
+                <div class="mb-6">
+                    <label class="block text-gray-700 font-bold mb-2">你的真實姓名</label>
+                    <input type="text" id="student-name" placeholder="例如：王小明" class="w-full bg-gray-50 border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:border-primary text-lg text-center font-bold">
+                </div>
+                <div class="mb-8">
+                    <label class="block text-gray-700 font-bold mb-2">測驗代碼 (Test ID)</label>
+                    <input type="text" id="student-test-id" placeholder="請輸入老師給的代碼" class="w-full bg-gray-50 border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:border-primary text-lg text-center font-bold tracking-widest">
+                </div>
+                <button onclick="startTest()" class="w-full bg-accent text-white font-black text-xl py-4 rounded-2xl shadow-cute hover:bg-indigo-500 transition-colors">
+                    開始挑戰！ <i class="fa-solid fa-rocket"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- 視圖 5: 測驗進行中 UI -->
+        <section id="test-taking" class="view-section hidden-view">
+            <div class="bg-white rounded-3xl shadow-cute overflow-hidden flex flex-col md:flex-row h-[80vh]">
+                <!-- 左側：文章區 -->
+                <div class="w-full md:w-1/2 p-6 md:p-8 bg-amber-50 overflow-y-auto border-b md:border-b-0 md:border-r border-amber-200">
+                    <h3 id="taking-title" class="text-2xl font-bold text-amber-900 mb-6 pb-2 border-b-2 border-amber-200">載入中...</h3>
+                    <div id="taking-text" class="text-lg text-gray-800 leading-loose whitespace-pre-wrap font-medium">
+                        文章載入中...
+                    </div>
+                </div>
+                
+                <!-- 右側：題目區 -->
+                <div class="w-full md:w-1/2 p-6 md:p-8 overflow-y-auto bg-white relative flex flex-col">
+                    <div class="flex justify-between items-center mb-6">
+                        <span class="bg-primary/20 text-primary font-bold px-4 py-1 rounded-full text-sm" id="question-counter">問題 1 / 5</span>
+                        <span class="text-gray-500 font-bold text-sm" id="question-level">層次：載入中</span>
+                    </div>
+
+                    <div id="question-content" class="flex-grow">
+                        <!-- 題目渲染區 -->
+                    </div>
+
+                    <div class="mt-8 flex justify-between items-center pt-4 border-t">
+                        <button id="btn-prev-q" onclick="navigateQuestion(-1)" class="px-6 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 hidden">上一題</button>
+                        <div class="flex-grow"></div>
+                        <button id="btn-next-q" onclick="navigateQuestion(1)" class="px-8 py-3 rounded-xl font-bold text-white bg-primary hover:bg-pink-500 shadow-md">下一題</button>
+                        <button id="btn-submit-test" onclick="submitTest()" class="px-8 py-3 rounded-xl font-bold text-white bg-success hover:bg-green-500 shadow-md hidden">交卷看成績</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 視圖 6: 測驗結果與解析 -->
+        <section id="test-result" class="view-section hidden-view">
+            <div class="text-center mb-8">
+                <h2 class="text-4xl font-black text-primary mb-2">測驗完成！</h2>
+                <p class="text-xl text-gray-600" id="result-student-name">王小明 的成績單</p>
+            </div>
+
+            <div class="bg-white rounded-3xl shadow-cute p-8 max-w-4xl mx-auto mb-8 relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-secondary/30 rounded-bl-full -z-10"></div>
+                
+                <!-- 總分與雷達圖區塊 (簡化為條狀圖) -->
+                <div class="flex flex-col md:flex-row gap-8 items-center mb-10 pb-10 border-b border-gray-100">
+                    <div class="w-full md:w-1/3 text-center">
+                        <div class="text-6xl font-black text-accent mb-2" id="result-total-score">0</div>
+                        <div class="text-gray-500 font-bold">總分</div>
+                    </div>
+                    <div class="w-full md:w-2/3 space-y-4" id="result-level-bars">
+                        <!-- 動態產生能力條 -->
+                    </div>
+                </div>
+
+                <h3 class="text-2xl font-bold text-gray-800 mb-6"><i class="fa-solid fa-list-check text-primary"></i> 逐題解析</h3>
+                <div id="result-details" class="space-y-6">
+                    <!-- 動態產生解析 -->
+                </div>
+                
+                <div class="mt-10 text-center">
+                     <button onclick="switchView('main-menu')" class="bg-gray-200 text-gray-700 py-3 px-8 rounded-full font-bold hover:bg-gray-300 text-lg">回首頁</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ================= 模態視窗 (Modals) ================= -->
+
+    <!-- 1. 教學設定 Modal -->
+    <div id="help-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden-view opacity-0 transition-opacity">
+        <div class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl transform scale-95 transition-transform" id="help-modal-content">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-primary"><i class="fa-solid fa-circle-info"></i> 如何設定 Firebase?</h3>
+                <button onclick="hideModal('help-modal')" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            </div>
+            <div class="space-y-4 text-gray-700">
+                <p>本系統為無伺服器架構，資料完全儲存在您個人的 Firebase 專案中，確保隱私與免費。</p>
+                <ol class="list-decimal pl-5 space-y-2 font-medium">
+                    <li>前往 <a href="https://console.firebase.google.com/" target="_blank" class="text-blue-500 underline">Firebase 控制台</a> 建立新專案。</li>
+                    <li>在專案中新增一個 <b>Web 應用程式</b> (`</>`)。</li>
+                    <li>啟用 <b>Firestore Database</b>，並將安全規則設為允許讀寫 (測試期)。</li>
+                    <li>啟用 <b>Authentication</b> 中的 <b>匿名登入 (Anonymous)</b>。</li>
+                    <li>在專案設定中，複製 <code>firebaseConfig</code> 內的內容。</li>
+                    <li>回到本系統點擊「設定連線資訊」並貼上。</li>
+                </ol>
+                <div class="bg-gray-100 p-3 rounded-lg text-sm font-mono mt-4">
+                    // 請複製引號內的屬性<br>
+                    apiKey: "AIzaSy...",<br>
+                    authDomain: "...",<br>
+                    ...<br>
+                    appId: "1:123..."
+                </div>
+            </div>
+            <button onclick="hideModal('help-modal'); showModal('settings-modal');" class="w-full mt-6 bg-primary text-white font-bold py-3 rounded-xl hover:bg-pink-500">去設定</button>
+        </div>
+    </div>
+
+    <!-- 2. 設定 Modal -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden-view opacity-0 transition-opacity backdrop-blur-sm">
+        <div class="bg-white rounded-3xl p-6 md:p-8 max-w-xl w-full shadow-2xl max-h-[90vh] overflow-y-auto" id="settings-modal-content">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-accent"><i class="fa-solid fa-gear"></i> 系統連線設定</h3>
+                <button onclick="hideModal('settings-modal')" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            </div>
+            
+            <div class="mb-6">
+                <label class="block text-gray-800 font-bold mb-2">貼上 Firebase 設定：</label>
+                <p class="text-sm text-gray-500 mb-3 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                    請從您的 Firebase 專案複製 <code>firebaseConfig</code> 物件 <code>{</code> 和 <code>}</code> 之間的<b>六行內容 (Key: Value)</b>貼到下方。<br>
+                    <span class="text-red-500 font-bold">⚠️ 請勿貼上大括號 {} 或變數宣告 (const...)。</span>
+                </p>
+                <textarea id="config-input" rows="6" placeholder='apiKey: "AIzaSyD...",&#10;authDomain: "your-project.firebaseapp.com",&#10;projectId: "your-project",&#10;storageBucket: "your-project.appspot.com",&#10;messagingSenderId: "123456789",&#10;appId: "1:123:web:abc"' class="w-full bg-gray-50 border-2 border-gray-300 rounded-xl p-3 font-mono text-sm focus:border-accent focus:outline-none"></textarea>
+            </div>
+
+            <div class="flex gap-4 mb-8">
+                <button onclick="saveConfig()" class="flex-1 bg-accent text-white font-bold py-3 rounded-xl hover:bg-indigo-500 shadow-md">解析並儲存設定</button>
+                <button onclick="resetConfig()" class="bg-red-50 border border-red-200 text-red-600 font-bold py-3 px-4 rounded-xl hover:bg-red-100 transition-colors" title="清除本機設定">
+                    <i class="fa-solid fa-trash-can"></i> 清除
+                </button>
+            </div>
+
+            <hr class="my-6 border-gray-200">
+
+            <div class="mb-2">
+                <h4 class="font-bold text-gray-800 mb-2"><i class="fa-solid fa-share-nodes"></i> 產生分享連結 (教師專用)</h4>
+                <p class="text-xs text-gray-500 mb-3">您可以將當前設定打包成連結或 QR Code 傳給學生設備，掃描後自動連線，學生不需手動設定。</p>
+                <button onclick="generateShareLink()" class="w-full bg-gray-100 text-gray-700 font-bold py-2 rounded-lg hover:bg-gray-200 mb-3 border border-gray-300">產生分享條碼與連結</button>
+                
+                <div id="share-area" class="hidden text-center bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <img id="share-qr" src="" alt="QR Code" class="mx-auto mb-3 w-40 h-40 border bg-white p-2 rounded-lg shadow-sm">
+                    <input type="text" id="share-url" readonly class="w-full bg-white border rounded p-2 text-xs text-gray-500 mb-2 text-center" onclick="this.select();">
+                    <button onclick="copyShareUrl()" class="text-sm font-bold text-primary"><i class="fa-regular fa-copy"></i> 複製網址</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 自訂 Confirm/Alert Modal (取代原生 alert) -->
+    <div id="dialog-modal" class="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4 hidden-view opacity-0">
+        <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center transform scale-90 transition-transform" id="dialog-modal-content">
+            <div id="dialog-icon" class="text-5xl mb-4 text-primary"><i class="fa-solid fa-circle-exclamation"></i></div>
+            <h3 id="dialog-title" class="text-xl font-bold text-gray-800 mb-2">標題</h3>
+            <p id="dialog-message" class="text-gray-600 mb-6">訊息內容</p>
+            <div class="flex gap-3 justify-center" id="dialog-buttons">
+                <!-- 動態按鈕 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 容器 -->
+    <div id="toast-container" class="fixed top-20 right-4 z-[70] flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- ================= Firebase & 系統邏輯 (JavaScript) ================= -->
+
+    <!-- 🔥 1. 寫死設定區 (優先級 2) 🔥 -->
+    <script>
+        // 【使用者請直接修改上述六行引號內的數值，填入您真實的 Firebase 設定即可 (無需更動變數名稱或大括號)】
+        // 若此處為 "demo"，系統會嘗試讀取 URL 參數或 LocalStorage 中的設定。
+        const defaultFirebaseConfig = {
+            apiKey: "demo",
+            authDomain: "demo",
+            projectId: "demo",
+            storageBucket: "demo",
+            messagingSenderId: "demo",
+            appId: "demo"
+        };
+    </script>
+
+    <!-- 系統核心邏輯 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, doc, getDoc, query, where, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+        // Gemini Canvas 要求的變數
+        const apiKey = ""; // 供環境自動注入
+        
+        // 全域狀態
+        window.appState = {
+            db: null,
+            auth: null,
+            user: null,
+            isConfigured: false,
+            currentTest: null, // 正在考的試卷
+            userAnswers: [], // 學生作答紀錄
+            currentQIndex: 0
+        };
+
+        // --- UI 工具函式 ---
+        
+        window.showToast = (message, type = 'info') => {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let bgClass = 'bg-white border-l-4 border-blue-500';
+            let icon = '<i class="fa-solid fa-circle-info text-blue-500"></i>';
+            if(type === 'success') { bgClass = 'bg-white border-l-4 border-green-500'; icon = '<i class="fa-solid fa-circle-check text-green-500"></i>'; }
+            if(type === 'error') { bgClass = 'bg-white border-l-4 border-red-500'; icon = '<i class="fa-solid fa-circle-xmark text-red-500"></i>'; }
+            if(type === 'warning') { bgClass = 'bg-white border-l-4 border-orange-500'; icon = '<i class="fa-solid fa-triangle-exclamation text-orange-500"></i>'; }
+
+            toast.className = `${bgClass} shadow-lg rounded-r-lg px-4 py-3 min-w-[250px] flex items-center gap-3 toast-enter pointer-events-auto`;
+            toast.innerHTML = `${icon} <span class="font-bold text-gray-700">${message}</span>`;
+            
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.replace('toast-enter', 'toast-exit');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        };
+
+        window.showModal = (id) => {
+            const modal = document.getElementById(id);
+            const content = document.getElementById(`${id}-content`);
+            modal.classList.remove('hidden-view');
+            // Trigger reflow
+            void modal.offsetWidth;
+            modal.classList.remove('opacity-0');
+            modal.classList.add('opacity-100');
+            if(content) {
+                content.classList.remove('scale-95');
+                content.classList.add('scale-100');
+            }
+        };
+
+        window.hideModal = (id) => {
+            const modal = document.getElementById(id);
+            const content = document.getElementById(`${id}-content`);
+            modal.classList.remove('opacity-100');
+            modal.classList.add('opacity-0');
+            if(content) {
+                content.classList.remove('scale-100');
+                content.classList.add('scale-95');
+            }
+            setTimeout(() => modal.classList.add('hidden-view'), 300);
+        };
+
+        window.customDialog = (title, message, type = 'info', onConfirm = null) => {
+            document.getElementById('dialog-title').innerText = title;
+            document.getElementById('dialog-message').innerText = message;
+            
+            const iconDiv = document.getElementById('dialog-icon');
+            if(type === 'warning') iconDiv.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-orange-500"></i>';
+            else if(type === 'error') iconDiv.innerHTML = '<i class="fa-solid fa-circle-xmark text-red-500"></i>';
+            else if(type === 'success') iconDiv.innerHTML = '<i class="fa-regular fa-face-smile-wink text-green-500"></i>';
+            else iconDiv.innerHTML = '<i class="fa-solid fa-circle-info text-blue-500"></i>';
+
+            const btnContainer = document.getElementById('dialog-buttons');
+            btnContainer.innerHTML = '';
+
+            if (onConfirm) {
+                // Confirm 模式
+                const btnCancel = document.createElement('button');
+                btnCancel.className = "px-6 py-2 rounded-full font-bold bg-gray-100 text-gray-600 hover:bg-gray-200";
+                btnCancel.innerText = "取消";
+                btnCancel.onclick = () => hideModal('dialog-modal');
+                
+                const btnOk = document.createElement('button');
+                btnOk.className = "px-6 py-2 rounded-full font-bold bg-primary text-white hover:bg-pink-500 shadow-md";
+                btnOk.innerText = "確定";
+                btnOk.onclick = () => { hideModal('dialog-modal'); onConfirm(); };
+                
+                btnContainer.appendChild(btnCancel);
+                btnContainer.appendChild(btnOk);
+            } else {
+                // Alert 模式
+                const btnOk = document.createElement('button');
+                btnOk.className = "px-8 py-2 rounded-full font-bold bg-primary text-white hover:bg-pink-500 shadow-md";
+                btnOk.innerText = "我知道了";
+                btnOk.onclick = () => hideModal('dialog-modal');
+                btnContainer.appendChild(btnOk);
+            }
+            showModal('dialog-modal');
+        };
+
+        window.switchView = (viewId) => {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden-view'));
+            document.getElementById(viewId).classList.remove('hidden-view');
+            window.scrollTo(0,0);
+            
+            // 視圖特定初始化邏輯
+            if (viewId === 'teacher-dashboard') loadTestList();
+        };
+
+        // --- Config 解析與初始化邏輯 ---
+
+        // 優先級 1: 網址參數
+        const parseUrlConfig = () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('config')) {
+                try {
+                    const base64Str = urlParams.get('config');
+                    const jsonStr = decodeURIComponent(atob(base64Str));
+                    const config = JSON.parse(jsonStr);
+                    if (config.apiKey && config.projectId) {
+                        localStorage.setItem('pirlsFirebaseConfig', JSON.stringify(config));
+                        // 清除網址參數
+                        window.history.replaceState(null, '', window.location.pathname);
+                        showToast('已成功從分享連結載入設定！', 'success');
+                        return config;
+                    }
+                } catch (e) {
+                    console.error("URL Config parsing error:", e);
+                    showToast('無效的分享連結設定', 'error');
+                }
+            }
+            return null;
+        };
+
+        // 決定最終 Config
+        const getFinalConfig = () => {
+            let config = parseUrlConfig(); // 優先級 1
+            
+            if (!config && typeof defaultFirebaseConfig !== 'undefined' && defaultFirebaseConfig.apiKey !== "demo") {
+                config = defaultFirebaseConfig; // 優先級 2 (Hardcoded)
+            }
+            
+            if (!config) {
+                try {
+                    const localData = localStorage.getItem('pirlsFirebaseConfig');
+                    if (localData) config = JSON.parse(localData); // 優先級 3 (LocalStorage)
+                } catch(e){}
+            }
+            return config;
+        };
+
+        // 初始化 Firebase
+        const initFirebase = async () => {
+            const statusEl = document.getElementById('auth-status');
+            const config = getFinalConfig();
+
+            if (!config || !config.apiKey || config.apiKey === "demo") {
+                appState.isConfigured = false;
+                document.getElementById('setup-banner').classList.remove('hidden');
+                statusEl.innerHTML = '<i class="fa-solid fa-link-slash text-red-500"></i> 未連線資料庫';
+                return; // 未設定，停留在主選單引導
+            }
+
+            try {
+                const app = initializeApp(config);
+                appState.db = getFirestore(app);
+                appState.auth = getAuth(app);
+                
+                // 必須等 Auth 完成
+                await signInAnonymously(appState.auth);
+                
+                appState.user = appState.auth.currentUser;
+                appState.isConfigured = true;
+                document.getElementById('setup-banner').classList.add('hidden');
+                statusEl.innerHTML = '<i class="fa-solid fa-cloud-check text-green-500"></i> 已連線就緒';
+                // showToast('資料庫連線成功', 'success');
+
+            } catch (error) {
+                console.error("Firebase Init Error:", error);
+                appState.isConfigured = false;
+                document.getElementById('setup-banner').classList.remove('hidden');
+                statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-red-500"></i> 連線失敗';
+                customDialog('連線錯誤', '無法連接到 Firebase，請檢查您的設定是否正確。', 'error');
+            }
+        };
+
+        // 啟動流程
+        initFirebase();
+
+        // 檢查設定防呆 (點擊按鈕時檢查)
+        window.checkSetupAndGo = (viewId) => {
+            if (!appState.isConfigured) {
+                customDialog('系統提示', '請先完成 Firebase 連線設定才能使用此功能喔！', 'warning', () => {
+                    showModal('settings-modal');
+                });
+                return;
+            }
+            switchView(viewId);
+        };
+
+        // 設定視窗：解析與儲存
+        window.saveConfig = () => {
+            const rawStr = document.getElementById('config-input').value;
+            if (!rawStr.trim()) {
+                showToast('請貼上內容', 'warning'); return;
+            }
+
+            const keys = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+            let newConfig = {};
+            let matchCount = 0;
+
+            keys.forEach(key => {
+                // 強健的正則表達式，容許引號(單雙)、空格
+                const regex = new RegExp(`${key}\\s*:\\s*['"]([^'"]+)['"]`);
+                const match = rawStr.match(regex);
+                if (match) {
+                    newConfig[key] = match[1];
+                    matchCount++;
+                }
+            });
+
+            if (matchCount >= 5) { // 至少5個關鍵欄位
+                localStorage.setItem('pirlsFirebaseConfig', JSON.stringify(newConfig));
+                showToast('設定已儲存，正在重新整理...', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                customDialog('解析失敗', '找不到完整的 Firebase 設定，請確認您貼上的格式。只需貼上 apiKey: "..." 的六行內容。', 'error');
+            }
+        };
+
+        // 設定視窗：清除設定
+        window.resetConfig = () => {
+            customDialog('警告', '確定要清除本機的 Firebase 設定嗎？清除後應用程式將無法存取目前的資料庫。', 'warning', () => {
+                localStorage.removeItem('pirlsFirebaseConfig');
+                location.reload();
+            });
+        };
+
+        // 產生分享連結與 QR Code
+        window.generateShareLink = () => {
+            const localConfig = localStorage.getItem('pirlsFirebaseConfig');
+            if (!localConfig) {
+                showToast('尚未儲存有效的設定，無法產生連結', 'warning'); return;
+            }
+            
+            // Base64 encode
+            const base64Config = btoa(encodeURIComponent(localConfig));
+            const baseUrl = window.location.href.split('?')[0];
+            const shareUrl = `${baseUrl}?config=${base64Config}`;
+            
+            document.getElementById('share-url').value = shareUrl;
+            document.getElementById('share-area').classList.remove('hidden');
+            
+            // 呼叫 QR Code API (使用免費開放的 goqr.me API)
+            document.getElementById('share-qr').src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(shareUrl)}&color=A18CD1`;
+        };
+
+        window.copyShareUrl = () => {
+            const copyText = document.getElementById("share-url");
+            copyText.select();
+            document.execCommand("copy");
+            showToast('已複製分享連結！', 'success');
+        };
+
+        // --- Firebase Firestore 資料庫操作 (需要設定後才能執行) ---
+
+        // 集合名稱
+        const DB_COLLECTION_TESTS = "pirls_tests";
+        const DB_COLLECTION_RECORDS = "pirls_records";
+
+        // --- 教師端：AI 出題邏輯 ---
+        window.generateTest = async () => {
+            const title = document.getElementById('create-title').value.trim();
+            const text = document.getElementById('create-text').value.trim();
+            const customKey = document.getElementById('gemini-api-key').value.trim();
+            
+            const qCount = [
+                parseInt(document.getElementById('q-count-1').value) || 0,
+                parseInt(document.getElementById('q-count-2').value) || 0,
+                parseInt(document.getElementById('q-count-3').value) || 0,
+                parseInt(document.getElementById('q-count-4').value) || 0
+            ];
+
+            if (!title || !text) { showToast('標題和文本不能為空！', 'warning'); return; }
+            if (qCount.reduce((a,b)=>a+b, 0) === 0) { showToast('總題數不能為 0！', 'warning'); return; }
+            
+            // Canvas Injection Logic
+            const finalKey = customKey || apiKey;
+            if (!finalKey) {
+                showToast('請輸入 Gemini API Key', 'error'); return;
+            }
+            const model = finalKey === apiKey ? "gemini-2.5-flash-preview-09-2025" : "gemini-2.5-flash";
+
+            document.getElementById('btn-generate').disabled = true;
+            document.getElementById('btn-generate').classList.add('opacity-50');
+            document.getElementById('ai-loading').classList.remove('hidden');
+
+            const systemPrompt = `你是一位專業的國小國語教師與測驗專家。請根據使用者提供的文章，產生符合 PIRLS 閱讀理解四個層次的單選題測驗。
+必須嚴格遵守以下層次數量：
+- 直接提取 (Direct retrieval): ${qCount[0]} 題
+- 直接推斷 (Straightforward inferencing): ${qCount[1]} 題
+- 詮釋整合 (Interpreting and integrating): ${qCount[2]} 題
+- 比較評估 (Examining and evaluating): ${qCount[3]} 題
+
+請以嚴格的 JSON 陣列格式回傳，不要包含任何 markdown 標記 (如 \`\`\`json )，直接回傳陣列。
+陣列中的每個物件結構必須為：
+{
+  "level": "直接提取" | "直接推斷" | "詮釋整合" | "比較評估",
+  "question": "題目文字",
+  "options": ["選項A", "選項B", "選項C", "選項D"],
+  "answer": 正確選項的索引數字(0-3),
+  "explanation": "給學生的詳細詳解文字，解釋為什麼是這個答案"
+}`;
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${finalKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ role: "user", parts: [{ text: text }] }],
+                        systemInstruction: { parts: [{ text: systemPrompt }] },
+                        generationConfig: { responseMimeType: "application/json" }
+                    })
+                });
+
+                const data = await response.json();
+                if (data.error) throw new Error(data.error.message);
+                
+                let jsonText = data.candidates[0].content.parts[0].text;
+                // Regex Cleanup 移除 Markdown
+                jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+                const questions = JSON.parse(jsonText);
+
+                // 儲存至 Firestore
+                const docRef = await addDoc(collection(appState.db, DB_COLLECTION_TESTS), {
+                    title: title,
+                    text: text,
+                    questions: questions,
+                    teacherId: appState.user.uid,
+                    createdAt: serverTimestamp()
+                });
+
+                showToast('🎉 測驗產生並儲存成功！', 'success');
+                document.getElementById('create-title').value = '';
+                document.getElementById('create-text').value = '';
+                switchView('teacher-dashboard');
+
+            } catch (error) {
+                console.error("AI Generation Error:", error);
+                customDialog('出題失敗', '呼叫 AI 時發生錯誤，請確認 API Key 是否正確，或稍後再試。\n' + error.message, 'error');
+            } finally {
+                document.getElementById('btn-generate').disabled = false;
+                document.getElementById('btn-generate').classList.remove('opacity-50');
+                document.getElementById('ai-loading').classList.add('hidden');
+            }
+        };
+
+        // 教師端：載入測驗列表
+        window.loadTestList = async () => {
+            const container = document.getElementById('test-list-container');
+            container.innerHTML = '<div class="text-center py-10 text-gray-400"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><br>載入中...</div>';
+            
+            try {
+                // 為了簡單起見，讀取所有測驗 (實務上應加 where('teacherId', '==', uid) 並配合 index)
+                const q = query(collection(appState.db, DB_COLLECTION_TESTS), orderBy("createdAt", "desc"));
+                const querySnapshot = await getDocs(q);
+                
+                if (querySnapshot.empty) {
+                    container.innerHTML = '<div class="text-center py-10 text-gray-400">目前還沒有測驗喔！趕快建立一個吧。</div>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                querySnapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    const d = new Date(data.createdAt?.toDate() || Date.now());
+                    const dateStr = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+                    
+                    const item = document.createElement('div');
+                    item.className = "flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100 hover:border-accent transition-colors";
+                    item.innerHTML = `
+                        <div>
+                            <div class="font-bold text-gray-800 text-lg">${data.title}</div>
+                            <div class="text-sm text-gray-500 mt-1">
+                                <i class="fa-regular fa-clock"></i> ${dateStr} | 共 ${data.questions.length} 題 | ID: <span class="font-mono text-xs bg-gray-200 px-1 rounded">${docSnap.id}</span>
+                            </div>
+                        </div>
+                        <div>
+                            <button onclick="copyTestId('${docSnap.id}')" class="text-primary hover:text-pink-600 p-2 rounded-full hover:bg-pink-50 transition" title="複製給學生的代碼">
+                                <i class="fa-regular fa-copy text-xl"></i>
+                            </button>
+                        </div>
+                    `;
+                    container.appendChild(item);
+                });
+            } catch (error) {
+                console.error("Load tests error:", error);
+                container.innerHTML = `<div class="text-center py-10 text-red-400">讀取失敗，請確認資料庫權限設定。<br><span class="text-xs">${error.message}</span></div>`;
+            }
+        };
+
+        window.copyTestId = (id) => {
+            const tempInput = document.createElement("input");
+            tempInput.value = id;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand("copy");
+            document.body.removeChild(tempInput);
+            showToast('已複製測驗代碼！請將此代碼貼給學生', 'success');
+        };
+
+        // --- 學生端：測驗邏輯 ---
+        window.startTest = async () => {
+            const name = document.getElementById('student-name').value.trim();
+            const testId = document.getElementById('student-test-id').value.trim();
+            
+            if (!name || !testId) { showToast('姓名與代碼都必須填寫喔！', 'warning'); return; }
+
+            const btn = document.querySelector('#student-entry button');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> 尋找試卷中...';
+            btn.disabled = true;
+
+            try {
+                const docRef = doc(appState.db, DB_COLLECTION_TESTS, testId);
+                const docSnap = await getDoc(docRef);
+
+                if (!docSnap.exists()) {
+                    throw new Error("找不到這個代碼的測驗，請確定有沒有打錯喔！");
+                }
+
+                // 準備考試狀態
+                appState.currentTest = { id: testId, data: docSnap.data(), studentName: name };
+                appState.userAnswers = new Array(docSnap.data().questions.length).fill(null);
+                appState.currentQIndex = 0;
+
+                // 渲染 UI
+                document.getElementById('taking-title').innerText = appState.currentTest.data.title;
+                document.getElementById('taking-text').innerText = appState.currentTest.data.text;
+                
+                switchView('test-taking');
+                renderQuestion();
+
+            } catch (error) {
+                customDialog('找不到測驗', error.message, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        };
+
+        window.renderQuestion = () => {
+            const qIndex = appState.currentQIndex;
+            const qData = appState.currentTest.data.questions[qIndex];
+            const totalQ = appState.currentTest.data.questions.length;
+
+            document.getElementById('question-counter').innerText = `問題 ${qIndex + 1} / ${totalQ}`;
+            
+            // 處理層次顏色
+            let levelColor = "bg-gray-100 text-gray-600";
+            if (qData.level.includes("提取")) levelColor = "bg-green-100 text-green-700";
+            if (qData.level.includes("推斷")) levelColor = "bg-blue-100 text-blue-700";
+            if (qData.level.includes("整合")) levelColor = "bg-yellow-100 text-yellow-700";
+            if (qData.level.includes("評估")) levelColor = "bg-purple-100 text-purple-700";
+            
+            document.getElementById('question-level').innerHTML = `<span class="px-2 py-1 rounded text-xs ${levelColor}">${qData.level}</span>`;
+
+            // 渲染題目與選項
+            let html = `<h4 class="text-xl font-bold text-gray-800 mb-6 leading-relaxed">${qData.question}</h4><div class="space-y-3">`;
+            
+            qData.options.forEach((opt, idx) => {
+                const isSelected = appState.userAnswers[qIndex] === idx;
+                const activeClass = isSelected ? 'border-primary bg-pink-50 ring-2 ring-primary/30' : 'border-gray-200 hover:border-pink-300 hover:bg-gray-50';
+                
+                html += `
+                    <div onclick="selectAnswer(${idx})" class="cursor-pointer border-2 rounded-xl p-4 transition-all flex items-center gap-3 ${activeClass}">
+                        <div class="w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${isSelected ? 'border-primary' : 'border-gray-300'}">
+                            ${isSelected ? '<div class="w-3 h-3 bg-primary rounded-full"></div>' : ''}
+                        </div>
+                        <span class="text-lg text-gray-700">${opt}</span>
+                    </div>
+                `;
+            });
+            html += `</div>`;
+            document.getElementById('question-content').innerHTML = html;
+
+            // 按鈕狀態
+            document.getElementById('btn-prev-q').style.display = qIndex > 0 ? 'block' : 'none';
+            if (qIndex === totalQ - 1) {
+                document.getElementById('btn-next-q').style.display = 'none';
+                document.getElementById('btn-submit-test').style.display = 'block';
+            } else {
+                document.getElementById('btn-next-q').style.display = 'block';
+                document.getElementById('btn-submit-test').style.display = 'none';
+            }
+        };
+
+        window.selectAnswer = (idx) => {
+            appState.userAnswers[appState.currentQIndex] = idx;
+            renderQuestion(); // 重新渲染以更新選取狀態
+        };
+
+        window.navigateQuestion = (dir) => {
+            appState.currentQIndex += dir;
+            renderQuestion();
+        };
+
+        window.submitTest = () => {
+            // 檢查是否全答
+            if (appState.userAnswers.includes(null)) {
+                customDialog('等等喔！', '還有題目沒有作答，請確認每一題都有選到答案。', 'warning');
+                return;
+            }
+
+            customDialog('確定交卷？', '交卷後就不能修改答案囉！準備好要看成績了嗎？', 'info', async () => {
+                const btn = document.getElementById('btn-submit-test');
+                btn.innerText = "處理中..."; btn.disabled = true;
+                
+                await calculateAndSaveResult();
+                
+                btn.innerText = "交卷看成績"; btn.disabled = false;
+            });
+        };
+
+        const calculateAndSaveResult = async () => {
+            const questions = appState.currentTest.data.questions;
+            const answers = appState.userAnswers;
+            
+            let totalCorrect = 0;
+            // 統計各層次：{ levelName: { total: int, correct: int } }
+            let levelStats = {
+                "直接提取": {t:0, c:0, color:'bg-green-400'},
+                "直接推斷": {t:0, c:0, color:'bg-blue-400'},
+                "詮釋整合": {t:0, c:0, color:'bg-yellow-400'},
+                "比較評估": {t:0, c:0, color:'bg-purple-400'}
+            };
+
+            const detailedResults = [];
+
+            questions.forEach((q, i) => {
+                const isCorrect = answers[i] === q.answer;
+                if (isCorrect) totalCorrect++;
+                
+                // 層次分類防呆處理
+                let cat = "直接提取";
+                if(q.level.includes("推斷")) cat = "直接推斷";
+                if(q.level.includes("整合")) cat = "詮釋整合";
+                if(q.level.includes("評估")) cat = "比較評估";
+                
+                levelStats[cat].t++;
+                if (isCorrect) levelStats[cat].c++;
+
+                detailedResults.push({
+                    qNum: i + 1,
+                    question: q.question,
+                    userAnsStr: q.options[answers[i]],
+                    correctAnsStr: q.options[q.answer],
+                    isCorrect: isCorrect,
+                    explanation: q.explanation,
+                    level: cat
+                });
+            });
+
+            const finalScore = Math.round((totalCorrect / questions.length) * 100);
+
+            // 儲存紀錄至 Firestore
+            try {
+                await addDoc(collection(appState.db, DB_COLLECTION_RECORDS), {
+                    testId: appState.currentTest.id,
+                    studentName: appState.currentTest.studentName,
+                    userId: appState.user.uid,
+                    score: finalScore,
+                    answers: answers,
+                    levelStats: levelStats, // 儲存層次數據供老師未來分析
+                    createdAt: serverTimestamp()
+                });
+            } catch (e) {
+                console.error("Save record error", e);
+                // 即使儲存失敗也讓學生看成績，但不中斷流程
+                showToast("成績儲存發生異常，但仍可觀看結果", "warning");
+            }
+
+            // 渲染結果畫面
+            document.getElementById('result-student-name').innerText = `${appState.currentTest.studentName} 的成績單`;
+            document.getElementById('result-total-score').innerText = finalScore;
+            
+            // 渲染能力條
+            let barsHtml = '';
+            for (const [key, val] of Object.entries(levelStats)) {
+                if (val.t > 0) {
+                    const percent = Math.round((val.c / val.t) * 100);
+                    barsHtml += `
+                        <div>
+                            <div class="flex justify-between text-sm font-bold text-gray-600 mb-1">
+                                <span>${key}</span>
+                                <span>${percent}% (${val.c}/${val.t})</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-3">
+                                <div class="${val.color} h-3 rounded-full" style="width: ${percent}%"></div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            document.getElementById('result-level-bars').innerHTML = barsHtml;
+
+            // 渲染逐題解析
+            let detailsHtml = '';
+            detailedResults.forEach(res => {
+                const statusIcon = res.isCorrect 
+                    ? '<i class="fa-solid fa-circle-check text-green-500 text-2xl"></i>' 
+                    : '<i class="fa-solid fa-circle-xmark text-red-500 text-2xl"></i>';
+                const bg = res.isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
+                
+                detailsHtml += `
+                    <div class="border-2 rounded-2xl p-5 ${bg}">
+                        <div class="flex items-start gap-4 mb-3">
+                            <div class="mt-1">${statusIcon}</div>
+                            <div class="flex-grow">
+                                <h5 class="text-lg font-bold text-gray-800 mb-2"><span class="text-sm font-normal text-gray-500 mr-2">Q${res.qNum}</span> ${res.question}</h5>
+                                <div class="text-sm space-y-1">
+                                    <p class="${res.isCorrect ? 'text-green-700 font-bold' : 'text-gray-600 line-through'}">你的答案：${res.userAnsStr}</p>
+                                    ${!res.isCorrect ? `<p class="text-red-600 font-bold">正確答案：${res.correctAnsStr}</p>` : ''}
+                                </div>
+                            </div>
+                            <div class="text-xs font-bold text-gray-400 bg-white px-2 py-1 rounded border">${res.level}</div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-gray-200/50">
+                            <p class="text-sm text-gray-700 bg-white/50 p-3 rounded-lg"><i class="fa-solid fa-chalkboard-user text-accent mr-2"></i><b>老師說：</b>${res.explanation}</p>
+                        </div>
+                    </div>
+                `;
+            });
+            document.getElementById('result-details').innerHTML = detailsHtml;
+
+            switchView('test-result');
+        };
+
+        // --- 工具：圖片壓縮為 Base64 (保留給未來擴充使用) ---
+        window.compressImageToBase64 = (file, maxWidth = 800) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = event => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > maxWidth) {
+                            height = Math.round((height *= maxWidth / width));
+                            width = maxWidth;
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.8)); // 壓縮為 80% 品質的 JPEG
+                    };
+                    img.onerror = error => reject(error);
+                };
+                reader.onerror = error => reject(error);
+            });
+        };
+
+    </script>
+</body>
+</html>
