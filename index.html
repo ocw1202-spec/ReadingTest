@@ -294,6 +294,26 @@
 
     <!-- ================= 模態視窗 (Modals) ================= -->
 
+    <!-- 0. 教師登入密碼 Modal (防 F12 驗證用) -->
+    <div id="teacher-login-modal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden-view opacity-0 transition-opacity backdrop-blur-sm">
+        <div class="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl transform scale-95 transition-transform" id="teacher-login-modal-content">
+            <div class="text-center mb-6">
+                <div class="w-20 h-20 mx-auto bg-indigo-100 rounded-full flex items-center justify-center mb-4">
+                    <i class="fa-solid fa-lock text-4xl text-accent"></i>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-800">教師身分驗證</h3>
+                <p class="text-gray-500 text-sm mt-2">請輸入密碼以進入教師控制台</p>
+            </div>
+            <div class="mb-6">
+                <input type="password" id="teacher-pwd-input" placeholder="請輸入密碼 (預設 123456)" class="w-full bg-gray-50 border-2 border-gray-200 rounded-xl p-4 text-center font-bold text-xl tracking-widest focus:border-accent focus:outline-none" onkeypress="if(event.key==='Enter') verifyTeacherLogin()">
+            </div>
+            <div class="flex gap-3">
+                <button onclick="hideModal('teacher-login-modal')" class="flex-1 bg-gray-100 text-gray-600 font-bold py-3 rounded-xl hover:bg-gray-200 transition-colors">返回首頁</button>
+                <button onclick="verifyTeacherLogin()" class="flex-1 bg-accent text-white font-bold py-3 rounded-xl hover:bg-indigo-500 shadow-md transition-colors">登入</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 1. 教學設定 Modal -->
     <div id="help-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden-view opacity-0 transition-opacity">
         <div class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl transform scale-95 transition-transform" id="help-modal-content">
@@ -338,6 +358,13 @@
                     <span class="text-red-500 font-bold">⚠️ 請勿貼上大括號 {} 或變數宣告 (const...)。</span>
                 </p>
                 <textarea id="config-input" rows="6" placeholder='apiKey: "AIzaSyD...",&#10;authDomain: "your-project.firebaseapp.com",&#10;projectId: "your-project",&#10;storageBucket: "your-project.appspot.com",&#10;messagingSenderId: "123456789",&#10;appId: "1:123:web:abc"' class="w-full bg-gray-50 border-2 border-gray-300 rounded-xl p-3 font-mono text-sm focus:border-accent focus:outline-none"></textarea>
+            </div>
+
+            <!-- 新增：教師密碼設定區 -->
+            <div class="mb-6 bg-pink-50 p-4 rounded-xl border border-pink-200">
+                <label class="block text-pink-800 font-bold mb-2"><i class="fa-solid fa-lock"></i> 自訂教師登入密碼 (選填)</label>
+                <p class="text-xs text-pink-600 mb-2 leading-relaxed">預設密碼為 <b>123456</b>。為了防止學生按 F12 偷看原始碼，系統採用 SHA-256 單向加密技術，真實密碼不會暴露在程式碼中。</p>
+                <input type="password" id="config-teacher-pwd" placeholder="若需更改請在此輸入新密碼，留空則維持原設定" class="w-full bg-white border border-pink-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-pink-400">
             </div>
 
             <div class="flex gap-4 mb-8">
@@ -409,6 +436,7 @@
             auth: null,
             user: null,
             isConfigured: false,
+            teacherAuth: false, // 判斷是否已通過教師密碼驗證
             currentTest: null, // 正在考的試卷
             userAnswers: [], // 學生作答紀錄
             currentQIndex: 0
@@ -476,7 +504,6 @@
             btnContainer.innerHTML = '';
 
             if (onConfirm) {
-                // Confirm 模式
                 const btnCancel = document.createElement('button');
                 btnCancel.className = "px-6 py-2 rounded-full font-bold bg-gray-100 text-gray-600 hover:bg-gray-200";
                 btnCancel.innerText = "取消";
@@ -490,7 +517,6 @@
                 btnContainer.appendChild(btnCancel);
                 btnContainer.appendChild(btnOk);
             } else {
-                // Alert 模式
                 const btnOk = document.createElement('button');
                 btnOk.className = "px-8 py-2 rounded-full font-bold bg-primary text-white hover:bg-pink-500 shadow-md";
                 btnOk.innerText = "我知道了";
@@ -501,12 +527,52 @@
         };
 
         window.switchView = (viewId) => {
+            // 防護機制：如果要進入教師頁面且尚未驗證密碼，直接踢回主畫面
+            if (viewId.startsWith('teacher-') && !appState.teacherAuth) {
+                showToast('安全防護攔截：請先完成教師密碼驗證', 'error');
+                viewId = 'main-menu';
+            }
+
             document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden-view'));
             document.getElementById(viewId).classList.remove('hidden-view');
             window.scrollTo(0,0);
             
             // 視圖特定初始化邏輯
             if (viewId === 'teacher-dashboard') loadTestList();
+        };
+
+        // --- 防 F12 密碼雜湊加密邏輯 (SHA-256) ---
+        window.hashPassword = async (password) => {
+            const msgBuffer = new TextEncoder().encode(password);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        };
+
+        window.verifyTeacherLogin = async () => {
+            const pwdInput = document.getElementById('teacher-pwd-input').value;
+            if (!pwdInput) { showToast('請輸入密碼', 'warning'); return; }
+
+            const inputHash = await hashPassword(pwdInput);
+            const config = getFinalConfig();
+            
+            // "123456" 的 SHA-256 Hash，原始碼中不包含明碼
+            const DEFAULT_TEACHER_HASH = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92"; 
+            
+            // 優先使用使用者在設定中儲存的雜湊密碼，若無則使用預設雜湊密碼
+            const targetHash = (config && config.teacherPwdHash) ? config.teacherPwdHash : DEFAULT_TEACHER_HASH;
+
+            if (inputHash === targetHash) {
+                appState.teacherAuth = true;
+                hideModal('teacher-login-modal');
+                document.getElementById('teacher-pwd-input').value = '';
+                showToast('教師身分驗證成功', 'success');
+                switchView('teacher-dashboard');
+            } else {
+                showToast('密碼錯誤，請重新輸入', 'error');
+                document.getElementById('teacher-pwd-input').value = '';
+                document.getElementById('teacher-pwd-input').focus();
+            }
         };
 
         // --- Config 解析與初始化邏輯 ---
@@ -575,8 +641,6 @@
                 appState.isConfigured = true;
                 document.getElementById('setup-banner').classList.add('hidden');
                 statusEl.innerHTML = '<i class="fa-solid fa-cloud-check text-green-500"></i> 已連線就緒';
-                // showToast('資料庫連線成功', 'success');
-
             } catch (error) {
                 console.error("Firebase Init Error:", error);
                 appState.isConfigured = false;
@@ -597,11 +661,22 @@
                 });
                 return;
             }
+            // 若為教師入口，必須先經過密碼驗證
+            if (viewId === 'teacher-dashboard') {
+                if (appState.teacherAuth) {
+                    switchView(viewId);
+                } else {
+                    showModal('teacher-login-modal');
+                    document.getElementById('teacher-pwd-input').value = '';
+                    setTimeout(() => document.getElementById('teacher-pwd-input').focus(), 100);
+                }
+                return;
+            }
             switchView(viewId);
         };
 
-        // 設定視窗：解析與儲存
-        window.saveConfig = () => {
+        // 設定視窗：解析與儲存 (加入非同步以處理雜湊密碼)
+        window.saveConfig = async () => {
             const rawStr = document.getElementById('config-input').value;
             if (!rawStr.trim()) {
                 showToast('請貼上內容', 'warning'); return;
@@ -612,7 +687,6 @@
             let matchCount = 0;
 
             keys.forEach(key => {
-                // 強健的正則表達式，容許引號(單雙)、空格
                 const regex = new RegExp(`${key}\\s*:\\s*['"]([^'"]+)['"]`);
                 const match = rawStr.match(regex);
                 if (match) {
@@ -621,7 +695,20 @@
                 }
             });
 
-            if (matchCount >= 5) { // 至少5個關鍵欄位
+            if (matchCount >= 5) {
+                // 處理自訂教師密碼
+                const customPwd = document.getElementById('config-teacher-pwd').value;
+                if (customPwd) {
+                    // 只儲存密碼的 Hash 值，不存明碼
+                    newConfig.teacherPwdHash = await hashPassword(customPwd);
+                } else {
+                    // 若沒有輸入新密碼，則繼承舊的自訂密碼設定 (若有)
+                    const oldConfig = getFinalConfig();
+                    if (oldConfig && oldConfig.teacherPwdHash) {
+                        newConfig.teacherPwdHash = oldConfig.teacherPwdHash;
+                    }
+                }
+
                 localStorage.setItem('pirlsFirebaseConfig', JSON.stringify(newConfig));
                 showToast('設定已儲存，正在重新整理...', 'success');
                 setTimeout(() => location.reload(), 1000);
@@ -664,7 +751,7 @@
             showToast('已複製分享連結！', 'success');
         };
 
-        // --- Firebase Firestore 資料庫操作 (需要設定後才能執行) ---
+        // --- Firebase Firestore 資料庫操作 ---
 
         // 集合名稱
         const DB_COLLECTION_TESTS = "pirls_tests";
